@@ -21,11 +21,13 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MPerf {
 
-  private static final int NUMBER_OF_MEASUREMENTS_TO_INSERT = 150000;
+  private static final int NUMBER_OF_MEASUREMENTS_TO_INSERT = 450000;
   private static final int NUMBER_PER_BATCH = 15;
   private static final int NUMBER_OF_UNIQUE_METRICS = 1000;
   private static final int SOCKET_TIMEOUT_MILLIS = 20;
@@ -100,10 +102,12 @@ public class MPerf {
       int metricCount = 0;
       HashMap<String, java.sql.Timestamp> metricCreateDateMap = new HashMap<>();
 
-      final AtomicInteger atomicSuccessCount = new AtomicInteger();
-      final AtomicInteger atomicErrorCount = new AtomicInteger();
+//      final AtomicInteger atomicSuccessCount = new AtomicInteger();
+//      final AtomicInteger atomicErrorCount = new AtomicInteger();
 
-      MyFutureCallback myFutureCallback = new MyFutureCallback(atomicSuccessCount, atomicErrorCount);
+//      MyFutureCallback myFutureCallback = new MyFutureCallback(atomicSuccessCount, atomicErrorCount);
+//      List<MyFutureCallback> myFutureCallbackList = new LinkedList<>();
+      List<MyFutureCallbackInt> myFutureCallbackList = new LinkedList<>();
 
       for (int i = 0; i < NUMBER_OF_MEASUREMENTS_TO_INSERT / NUMBER_PER_BATCH; i++) {
 
@@ -131,9 +135,11 @@ public class MPerf {
                         metricNameSuffix);
 
 //          batchStatement.add(measurmentsBoundStmt);
+          MyFutureCallbackInt myFutureCallback1 = new MyFutureCallbackInt();
 
           ResultSetFuture future1 = session.executeAsync(measurmentsBoundStmt);
-          Futures.addCallback(future1, myFutureCallback);
+          Futures.addCallback(future1, myFutureCallback1);
+          myFutureCallbackList.add(myFutureCallback1);
 
           BoundStatement
               metricBoundStmt =
@@ -145,8 +151,10 @@ public class MPerf {
 //          ResultSetFuture future = session.executeAsync(batchStatement);
 //          Futures.addCallback(future, myFutureCallback);
 
+          MyFutureCallbackInt myFutureCallback2 = new MyFutureCallbackInt();
           ResultSetFuture future2 = session.executeAsync(metricBoundStmt);
-          Futures.addCallback(future2, myFutureCallback);
+          Futures.addCallback(future2, myFutureCallback2);
+          myFutureCallbackList.add(myFutureCallback2);
 
 
           metricCount++;
@@ -155,7 +163,27 @@ public class MPerf {
 
       }
 
-      while (myFutureCallback.atomicErrorCount.get() + myFutureCallback.atomicSuccessCount.get() < NUMBER_OF_MEASUREMENTS_TO_INSERT) {
+      int successCnt = 0;
+      int errorCnt = 0;
+
+      boolean done = false;
+      while (!done) {
+
+        for (MyFutureCallbackInt myFutureCallback: myFutureCallbackList) {
+
+          successCnt += myFutureCallback.successCount;
+          errorCnt += myFutureCallback.errorCount;
+
+        }
+        if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT * 2) {
+          done = true;
+        } else {
+          System.out.println("Not done");
+        }
+      }
+
+//      while (myFutureCallback.atomicErrorCount.get() + myFutureCallback.atomicSuccessCount.get() < NUMBER_OF_MEASUREMENTS_TO_INSERT) {
+//
 
 //        try {
 //          System.out.println("Sleeping for 5 seconds...");
@@ -164,7 +192,13 @@ public class MPerf {
 //          e.printStackTrace();
 //        }
 
-      }
+//      }
+
+//      System.out.println("Errors: " + myFutureCallback.atomicErrorCount);
+//      System.out.println("Success: " + myFutureCallback.atomicSuccessCount);
+
+      System.out.println("Errors: " + errorCnt);
+      System.out.println("Success: " + successCnt);
 
     } finally {
 
@@ -173,12 +207,41 @@ public class MPerf {
       }
 
     }
-  }
 
+
+
+  }
+  private static class MyFutureCallbackInt implements FutureCallback<ResultSet> {
+
+    int successCount = 0;
+    int errorCount = 0;
+
+    MyFutureCallbackInt() {
+
+    }
+
+    @Override
+    public void onSuccess(ResultSet result) {
+      this.successCount++;
+
+    }
+
+    @Override
+    public void onFailure(Throwable t) {
+      this.errorCount++;
+
+    }
+  }
   private static class MyFutureCallback implements FutureCallback<ResultSet> {
 
      AtomicInteger atomicSuccessCount = null;
      AtomicInteger atomicErrorCount = null;
+
+    MyFutureCallback() {
+
+      this.atomicSuccessCount = new AtomicInteger();
+      this.atomicErrorCount = new AtomicInteger();
+    }
 
     MyFutureCallback (AtomicInteger atomicSuccessCount, AtomicInteger atomicErrorCount) {
 
