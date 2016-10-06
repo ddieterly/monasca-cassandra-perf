@@ -131,6 +131,7 @@ public class MPerf {
                         metricNameSuffix);
 
 //          batchStatement.add(measurmentsBoundStmt);
+
           ResultSetFuture future1 = session.executeAsync(measurmentsBoundStmt);
           Futures.addCallback(future1, myFutureCallback);
 
@@ -141,10 +142,12 @@ public class MPerf {
 
 
 //          batchStatement.add(metricBoundStmt);
-
 //          ResultSetFuture future = session.executeAsync(batchStatement);
+//          Futures.addCallback(future, myFutureCallback);
+
           ResultSetFuture future2 = session.executeAsync(metricBoundStmt);
           Futures.addCallback(future2, myFutureCallback);
+
 
           metricCount++;
 
@@ -154,12 +157,12 @@ public class MPerf {
 
       while (myFutureCallback.atomicErrorCount.get() + myFutureCallback.atomicSuccessCount.get() < NUMBER_OF_MEASUREMENTS_TO_INSERT) {
 
-        try {
-          System.out.println("Sleeping for 5 seconds...");
-          Thread.sleep(5000);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
+//        try {
+//          System.out.println("Sleeping for 5 seconds...");
+//          Thread.sleep(5000);
+//        } catch (InterruptedException e) {
+//          e.printStackTrace();
+//        }
 
       }
 
