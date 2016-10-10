@@ -26,10 +26,7 @@ import java.util.List;
 public class MPerfThreaded {
 
   private int numThreads = 0;
-  Cluster cluster = null;
-  Session session = null;
-  private PreparedStatement measurementsInsertStmt = null;
-
+  List<MPerfRunnable> mPerfRunnableArrayList = new ArrayList<>();
 
   private static int NUMBER_OF_MEASUREMENTS_TO_INSERT = 0;
   private static final int NUMBER_OF_UNIQUE_METRICS = 1000;
@@ -78,111 +75,106 @@ public class MPerfThreaded {
 
     this.numThreads = numThreads;
 
-    cluster =
-        cluster.builder().addContactPoint("127.0.0.1")
-            .withSocketOptions(new SocketOptions().setConnectTimeoutMillis(SOCKET_TIMEOUT_MILLIS))
-            .build();
+    for (int i = 0; i < numThreads; i++) {
 
-    this.session = cluster.connect();
-
-    this.measurementsInsertStmt =
-        session.prepare(
-            "insert into monasca.measurements (region, tenant_id, bucket_start, metric_id, "
-            + "time_stamp, value, value_meta) values (?, ?, ?, ?, ?, ?, ?)");
-
+      MPerfRunnable mPerfRunnable = new MPerfRunnable();
+      mPerfRunnableArrayList.add(mPerfRunnable);
+    }
 
   }
 
   private int runTests() {
 
-    try {
 
-      List<MPerfRunnable> mPerfRunnableLinkedList = new ArrayList<>();
+    for (int i = 0; i < numThreads; i++) {
+
+      MPerfRunnable mPerfRunnable = mPerfRunnableArrayList.get(i);
+      new Thread(mPerfRunnable).start();
+    }
+
+    logger.debug("Finished starting threads");
+
+    int successCnt = 0;
+    int errorCnt = 0;
+    boolean done = false;
+
+    while (!done) {
+
+      successCnt = 0;
+      errorCnt = 0;
 
       for (int i = 0; i < numThreads; i++) {
 
-        MPerfRunnable mPerfRunnable = new MPerfRunnable();
-        MPerfRunnable mPerfRunnable1 = new MPerfRunnable();
-        new Thread(mPerfRunnable).start();
-        mPerfRunnableLinkedList.add(mPerfRunnable);
+        successCnt += mPerfRunnableArrayList.get(i).successCnt;
+        errorCnt += mPerfRunnableArrayList.get(i).errorCnt;
+
       }
 
-      logger.debug("Finished starting threads");
+      logger.debug("successCnt: " + successCnt);
+      logger.debug("errorCnt: " + errorCnt);
 
-      int successCnt = 0;
-      int errorCnt = 0;
-      boolean done = false;
+      if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT * numThreads) {
 
-      while (!done) {
+        logger.debug("Main thread is done");
 
-        successCnt = 0;
-        errorCnt = 0;
+        done = true;
 
-        for (int i = 0; i < numThreads; i++) {
+      } else {
 
-          successCnt += mPerfRunnableLinkedList.get(i).successCnt;
-          errorCnt += mPerfRunnableLinkedList.get(i).errorCnt;
+        try {
 
-        }
+          logger.debug("Main thread is going to sleep");
+          Thread.sleep(5000);
 
-        logger.debug("successCnt: " + successCnt);
-        logger.debug("errorCnt: " + errorCnt);
+        } catch (InterruptedException e) {
 
-        if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT * numThreads) {
-
-          logger.debug("Main thread is done");
-
+          System.out.println("Caught InterruptedException");
           done = true;
 
-        } else {
-
-          try {
-
-            logger.debug("Main thread is going to sleep");
-            Thread.sleep(1000);
-
-          } catch (InterruptedException e) {
-
-            System.out.println("Caught InterruptedException");
-            done = true;
-
-          }
         }
       }
-
-      return successCnt;
-
-    } finally {
-
-      if (cluster != null) {
-
-        logger.debug("Closing cluster");
-        cluster.close();
-
-      }
     }
-  }
 
+    return successCnt;
+
+  }
 
   private class MPerfRunnable implements Runnable {
 
     int successCnt = 0;
     int errorCnt = 0;
     boolean done = false;
+    private Cluster cluster = null;
+    private Session session = null;
+    private PreparedStatement measurementsInsertStmt = null;
 
-    MPerfRunnable () {
 
+    MPerfRunnable() {
+
+      cluster =
+          cluster.builder().addContactPoint("127.0.0.1")
+              .withSocketOptions(new SocketOptions().setConnectTimeoutMillis(SOCKET_TIMEOUT_MILLIS))
+              .build();
+
+      this.session = cluster.connect();
+
+      this.measurementsInsertStmt =
+          session.prepare(
+              "insert into monasca.measurements (region, tenant_id, bucket_start, metric_id, "
+              + "time_stamp, value, value_meta) values (?, ?, ?, ?, ?, ?, ?)");
     }
 
     @Override
     public void run() {
 
-      Calendar calendar = Calendar.getInstance();
-      HashMap<String, Timestamp> metricCreateDateMap = new HashMap<>();
+      try {
 
-      List<MyFutureCallbackInt> myFutureCallbackList = new LinkedList<>();
+        Calendar calendar = Calendar.getInstance();
+        HashMap<String, Timestamp> metricCreateDateMap = new HashMap<>();
 
-      for (int i = 0; i < NUMBER_OF_MEASUREMENTS_TO_INSERT ; i++) {
+        List<MyFutureCallbackInt> myFutureCallbackList = new LinkedList<>();
+
+        for (int i = 0; i < NUMBER_OF_MEASUREMENTS_TO_INSERT; i++) {
 
           String metricNameSuffix = new Integer(i % NUMBER_OF_UNIQUE_METRICS).toString();
           String metricName = metricNamePrefix + metricNameSuffix;
@@ -200,8 +192,8 @@ public class MPerfThreaded {
           BoundStatement
               measurmentsBoundStmt =
               measurementsInsertStmt
-                  .bind(TENANT_ID, REGION, BUCKET_START_TIMESTAMP, metricIdSha1HashByteBuffer, updatedAt, (float) i,
-                        metricNameSuffix);
+                  .bind(TENANT_ID, REGION, BUCKET_START_TIMESTAMP, metricIdSha1HashByteBuffer,
+                        updatedAt, (float) i, metricNameSuffix);
 
           MyFutureCallbackInt myFutureCallback1 = new MyFutureCallbackInt();
 
@@ -211,42 +203,51 @@ public class MPerfThreaded {
 
         }
 
-      while (!done) {
+        while (!done) {
 
-        successCnt = 0;
-        errorCnt = 0;
+          successCnt = 0;
+          errorCnt = 0;
 
-        for (MyFutureCallbackInt myFutureCallback: myFutureCallbackList) {
+          for (MyFutureCallbackInt myFutureCallback : myFutureCallbackList) {
 
-          successCnt += myFutureCallback.successCount;
-          errorCnt += myFutureCallback.errorCount;
+            successCnt += myFutureCallback.successCount;
+            errorCnt += myFutureCallback.errorCount;
 
-        }
+          }
 
-        logger.debug("successCnt: " + successCnt);
-        logger.debug("errorCnt: " + errorCnt);
+          logger.debug("successCnt: " + successCnt);
+          logger.debug("errorCnt: " + errorCnt);
 
-        if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT) {
+          if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT) {
 
-          logger.debug("Thread is done") ;
+            logger.debug("Thread is done");
 
-          done = true;
-
-        } else {
-
-          try {
-
-            logger.debug("Thread worker going to sleep");
-            Thread.sleep(1000);
-
-          } catch (InterruptedException e) {
-
-            System.out.println("Caught InterruptedException");
             done = true;
+
+          } else {
+
+            try {
+
+              logger.debug("Thread worker going to sleep");
+              Thread.sleep(1000);
+
+            } catch (InterruptedException e) {
+
+              System.out.println("Caught InterruptedException");
+              done = true;
+            }
           }
         }
-      }
 
+      } finally {
+
+        if (cluster != null) {
+
+          logger.debug("Closing cluster");
+          cluster.close();
+
+        }
+      }
     }
   }
 
