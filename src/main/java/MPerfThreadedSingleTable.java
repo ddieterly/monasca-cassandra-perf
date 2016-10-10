@@ -21,7 +21,7 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 
-public class MPerfThreaded {
+public class MPerfThreadedSingleTable {
 
   private static final java.sql.Timestamp BUCKET_START_TIMESTAMP = new java.sql.Timestamp(0);
   private static final int SOCKET_TIMEOUT_MILLIS = 20;
@@ -32,7 +32,7 @@ public class MPerfThreaded {
   private static final String TENANT_ID = "tenant_1";
   private static final String dimensionHashString = "cloudcloud_3hostlocalhostservicemonitoring";
 
-  private static final Logger logger = LoggerFactory.getLogger(MPerfThreaded.class);
+  private static final Logger logger = LoggerFactory.getLogger(MPerfThreadedSingleTable.class);
 
   private final int numMeasurementsToInsert;
   private final int numThreads;
@@ -53,7 +53,8 @@ public class MPerfThreaded {
     logger.debug("Number of measurements to insert: {}", numMeasurementsToInsert);
     logger.debug("Number of unique metrics: {}");
 
-    MPerfThreaded mPerfThreaded = new MPerfThreaded(numThreads, numMeasurementsToInsert, numUniqueMetrics);
+    MPerfThreadedSingleTable
+        mPerfThreaded = new MPerfThreadedSingleTable(numThreads, numMeasurementsToInsert, numUniqueMetrics);
 
     DateTime start = DateTime.now();
 
@@ -70,7 +71,7 @@ public class MPerfThreaded {
     System.out.println("Finished!");
   }
 
-  public MPerfThreaded (int numThreads, int numMeasurementsToInsert, int numUniqueMetrics) {
+  public MPerfThreadedSingleTable(int numThreads, int numMeasurementsToInsert, int numUniqueMetrics) {
 
     this.numThreads = numThreads;
     this.numMeasurementsToInsert = numMeasurementsToInsert;
