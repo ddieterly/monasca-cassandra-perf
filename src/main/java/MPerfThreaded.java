@@ -16,79 +16,78 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
 public class MPerfThreaded {
 
-  private int numThreads = 0;
-  List<MPerfRunnable> mPerfRunnableArrayList = new ArrayList<>();
-
-  private static int NUMBER_OF_MEASUREMENTS_TO_INSERT = 0;
-  private static final int NUMBER_OF_UNIQUE_METRICS = 1000;
   private static final java.sql.Timestamp BUCKET_START_TIMESTAMP = new java.sql.Timestamp(0);
   private static final int SOCKET_TIMEOUT_MILLIS = 20;
+  private static final String CASSANDRA_IP_ADDRESS = "127.0.0.1";
 
   private static final String metricNamePrefix = "metric_";
   private static final String REGION = "region_1";
   private static final String TENANT_ID = "tenant_1";
-
   private static final String dimensionHashString = "cloudcloud_3hostlocalhostservicemonitoring";
-  private static final String valueMetaPrefix = "value_meta_";
 
   private static final Logger logger = LoggerFactory.getLogger(MPerfThreaded.class);
 
+  private final int numMeasurementsToInsert;
+  private final int numThreads;
+  private final List<MPerfRunnable> mPerfRunnableList;
+
   public static void main(String[] args) {
 
-    if (args.length != 2) {
-      System.out.println("Usage: MPerfThreaded <num threads> <num per thread>");
+    if (args.length != 3) {
+      System.out.println("Usage: MPerfThreaded <num threads> <num measurements per thread> <num unique metrics>");
       System.exit(-1);
     }
 
     int numThreads = Integer.parseInt(args[0]);
-    NUMBER_OF_MEASUREMENTS_TO_INSERT = Integer.parseInt(args[1]);
+    int numMeasurementsToInsert = Integer.parseInt(args[1]);
+    int numUniqueMetrics = Integer.parseInt(args[2]);
 
-    logger.debug("Number of threads: " + numThreads);
+    logger.debug("Number of threads: {}", numThreads);
+    logger.debug("Number of measurements to insert: {}", numMeasurementsToInsert);
+    logger.debug("Number of unique metrics: {}");
 
-    MPerfThreaded mPerfThreaded = new MPerfThreaded(numThreads);
+    MPerfThreaded mPerfThreaded = new MPerfThreaded(numThreads, numMeasurementsToInsert, numUniqueMetrics);
 
     DateTime start = DateTime.now();
 
     int totalSuccessCnt = mPerfThreaded.runTests();
 
-    logger.debug("Total success count: " + totalSuccessCnt);
-
     DateTime end = DateTime.now();
-
     int seconds  = Seconds.secondsBetween(start, end).getSeconds();
 
-    System.out.println("elapsed time for all async batches to complete: " + new Integer(seconds).toString());
-    System.out.println("measurements per sec: " + new Integer(totalSuccessCnt / seconds).toString());
+    System.out.format("Total upsert success count: %d%n", totalSuccessCnt);
+    System.out.format("Total upsert error count: %d%n", + (numMeasurementsToInsert * numThreads) - totalSuccessCnt);
+
+    System.out.format("Elapsed seconds for all async upserts to complete: %d%n", seconds);
+    System.out.format("Measurements upserted per sec: %d%n", totalSuccessCnt / seconds);
     System.out.println("Finished!");
   }
 
-  public MPerfThreaded (int numThreads) {
+  public MPerfThreaded (int numThreads, int numMeasurementsToInsert, int numUniqueMetrics) {
 
     this.numThreads = numThreads;
+    this.numMeasurementsToInsert = numMeasurementsToInsert;
+    this.mPerfRunnableList = new ArrayList<>(numThreads);
 
     for (int i = 0; i < numThreads; i++) {
 
-      MPerfRunnable mPerfRunnable = new MPerfRunnable();
-      mPerfRunnableArrayList.add(mPerfRunnable);
-    }
+      mPerfRunnableList.add(new MPerfRunnable(numMeasurementsToInsert, numUniqueMetrics));
 
+    }
   }
 
   private int runTests() {
 
-
     for (int i = 0; i < numThreads; i++) {
 
-      MPerfRunnable mPerfRunnable = mPerfRunnableArrayList.get(i);
+      MPerfRunnable mPerfRunnable = mPerfRunnableList.get(i);
       new Thread(mPerfRunnable).start();
     }
 
@@ -105,15 +104,15 @@ public class MPerfThreaded {
 
       for (int i = 0; i < numThreads; i++) {
 
-        successCnt += mPerfRunnableArrayList.get(i).successCnt;
-        errorCnt += mPerfRunnableArrayList.get(i).errorCnt;
+        successCnt += mPerfRunnableList.get(i).successCnt;
+        errorCnt += mPerfRunnableList.get(i).errorCnt;
 
       }
 
-      logger.debug("successCnt: " + successCnt);
-      logger.debug("errorCnt: " + errorCnt);
+      logger.debug("successCnt: {}", successCnt);
+      logger.debug("errorCnt: {}", errorCnt);
 
-      if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT * numThreads) {
+      if (successCnt + errorCnt == numMeasurementsToInsert * numThreads) {
 
         logger.debug("Main thread is done");
 
@@ -139,20 +138,27 @@ public class MPerfThreaded {
 
   }
 
-  private class MPerfRunnable implements Runnable {
+  private static class MPerfRunnable implements Runnable {
+
+    private final int numMeasurmentsToInsert;
+    private final int numUniqueMetrics;
 
     int successCnt = 0;
     int errorCnt = 0;
     boolean done = false;
+
     private Cluster cluster = null;
-    private Session session = null;
-    private PreparedStatement measurementsInsertStmt = null;
+    private final Session session ;
+    private final PreparedStatement measurementsInsertStmt;
 
 
-    MPerfRunnable() {
+    MPerfRunnable(int numMeasurmentsToInsert, int numUniqueMetrics) {
 
-      cluster =
-          cluster.builder().addContactPoint("127.0.0.1")
+      this.numMeasurmentsToInsert = numMeasurmentsToInsert;
+      this.numUniqueMetrics = numUniqueMetrics;
+
+       cluster =
+          cluster.builder().addContactPoint(CASSANDRA_IP_ADDRESS)
               .withSocketOptions(new SocketOptions().setConnectTimeoutMillis(SOCKET_TIMEOUT_MILLIS))
               .build();
 
@@ -170,24 +176,16 @@ public class MPerfThreaded {
       try {
 
         Calendar calendar = Calendar.getInstance();
-        HashMap<String, Timestamp> metricCreateDateMap = new HashMap<>();
 
         List<MyFutureCallbackInt> myFutureCallbackList = new LinkedList<>();
 
-        for (int i = 0; i < NUMBER_OF_MEASUREMENTS_TO_INSERT; i++) {
+        for (int i = 0; i < numMeasurmentsToInsert; i++) {
 
-          String metricNameSuffix = new Integer(i % NUMBER_OF_UNIQUE_METRICS).toString();
-          String metricName = metricNamePrefix + metricNameSuffix;
-          String metricIdHashString = REGION + TENANT_ID + metricName + dimensionHashString;
+          String metricNameSuffix = String.valueOf(i % numUniqueMetrics);
+          String metricName = metricNamePrefix.concat(metricNameSuffix);
+          String metricIdHashString = new StringBuilder(REGION).append(TENANT_ID).append(metricName).append(dimensionHashString).toString();
           ByteBuffer metricIdSha1HashByteBuffer = ByteBuffer.wrap(DigestUtils.sha(metricIdHashString));
-          java.sql.Timestamp nowTimeStamp = new java.sql.Timestamp(calendar.getTime().getTime());
-//          java.sql.Timestamp createdAt = null;
-          java.sql.Timestamp updatedAt = nowTimeStamp;
-//          if (metricCreateDateMap.containsKey(metricName)) {
-//            createdAt = metricCreateDateMap.get(metricName);
-//          } else {
-//            createdAt = nowTimeStamp;
-//          }
+          java.sql.Timestamp updatedAt = new java.sql.Timestamp(calendar.getTime().getTime());
 
           BoundStatement
               measurmentsBoundStmt =
@@ -195,11 +193,11 @@ public class MPerfThreaded {
                   .bind(TENANT_ID, REGION, BUCKET_START_TIMESTAMP, metricIdSha1HashByteBuffer,
                         updatedAt, (float) i, metricNameSuffix);
 
-          MyFutureCallbackInt myFutureCallback1 = new MyFutureCallbackInt();
+          MyFutureCallbackInt myFutureCallback = new MyFutureCallbackInt();
 
-          ResultSetFuture future1 = session.executeAsync(measurmentsBoundStmt);
-          Futures.addCallback(future1, myFutureCallback1);
-          myFutureCallbackList.add(myFutureCallback1);
+          ResultSetFuture future = session.executeAsync(measurmentsBoundStmt);
+          Futures.addCallback(future, myFutureCallback);
+          myFutureCallbackList.add(myFutureCallback);
 
         }
 
@@ -215,10 +213,10 @@ public class MPerfThreaded {
 
           }
 
-          logger.debug("successCnt: " + successCnt);
-          logger.debug("errorCnt: " + errorCnt);
+          logger.debug("successCnt: {}", successCnt);
+          logger.debug("errorCnt: {}", errorCnt);
 
-          if (successCnt + errorCnt == NUMBER_OF_MEASUREMENTS_TO_INSERT) {
+          if (successCnt + errorCnt == numMeasurmentsToInsert) {
 
             logger.debug("Thread is done");
 
@@ -272,4 +270,5 @@ public class MPerfThreaded {
 
     }
   }
+
 }
