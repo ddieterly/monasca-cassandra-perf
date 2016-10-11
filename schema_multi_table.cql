@@ -51,7 +51,7 @@ primary key ((tenant_id, region, bucket_start), created_at, metric_id)
 
 CREATE CUSTOM INDEX metrics_dimensions_index ON metrics (dimension_keys_values)
 USING 'org.apache.cassandra.index.sasi.SASIIndex'
-WITH OPTIONS = {'mode': 'PREFIX'};
+WITH OPTIONS = {'mode': 'CONTAINS'};
 
 CREATE CUSTOM INDEX metrics_names_index ON metrics (metric_name)
 USING 'org.apache.cassandra.index.sasi.SASIIndex'
