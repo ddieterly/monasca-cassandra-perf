@@ -156,9 +156,9 @@ public class MPerfThreadedMultiTable {
     private final PreparedStatement metricsInsertStmt;
 
 
-    MPerfRunnable(int numMeasurmentsToInsert, int numUniqueMetrics) {
+    MPerfRunnable(int numMeasurementsToInsert, int numUniqueMetrics) {
 
-      this.numMeasurmentsToInsert = numMeasurmentsToInsert;
+      this.numMeasurmentsToInsert = numMeasurementsToInsert;
       this.numUniqueMetrics = numUniqueMetrics;
 
        cluster =
@@ -236,8 +236,8 @@ public class MPerfThreadedMultiTable {
 
           for (MyFutureCallback myFutureCallback : myFutureCallbackList) {
 
-            successCnt += myFutureCallback.successCount;
-            errorCnt += myFutureCallback.errorCount;
+            successCnt += myFutureCallback.getSuccessCount();
+            errorCnt += myFutureCallback.getErrorCount();
 
           }
 
@@ -276,27 +276,4 @@ public class MPerfThreadedMultiTable {
       }
     }
   }
-
-  private static class MyFutureCallback implements FutureCallback<ResultSet> {
-
-    int successCount = 0;
-    int errorCount = 0;
-
-    MyFutureCallback() {
-
-    }
-
-    @Override
-    public void onSuccess(ResultSet result) {
-      this.successCount++;
-
-    }
-
-    @Override
-    public void onFailure(Throwable t) {
-      this.errorCount++;
-
-    }
-  }
-
 }

@@ -153,9 +153,9 @@ public class MPerfThreadedSingleTable {
     private final PreparedStatement measurementsInsertStmt;
 
 
-    MPerfRunnable(int numMeasurmentsToInsert, int numUniqueMetrics) {
+    MPerfRunnable(int numMeasurementsToInsert, int numUniqueMetrics) {
 
-      this.numMeasurmentsToInsert = numMeasurmentsToInsert;
+      this.numMeasurmentsToInsert = numMeasurementsToInsert;
       this.numUniqueMetrics = numUniqueMetrics;
 
        cluster =
@@ -178,7 +178,7 @@ public class MPerfThreadedSingleTable {
 
         Calendar calendar = Calendar.getInstance();
 
-        List<MyFutureCallbackInt> myFutureCallbackList = new LinkedList<>();
+        List<MyFutureCallback> myFutureCallbackList = new LinkedList<>();
 
         for (int i = 0; i < numMeasurmentsToInsert; i++) {
 
@@ -194,7 +194,7 @@ public class MPerfThreadedSingleTable {
                   .bind(TENANT_ID, REGION, BUCKET_START_TIMESTAMP, metricIdSha1HashByteBuffer,
                         updatedAt, (float) i, metricNameSuffix);
 
-          MyFutureCallbackInt myFutureCallback = new MyFutureCallbackInt();
+          MyFutureCallback myFutureCallback = new MyFutureCallback();
 
           ResultSetFuture future = session.executeAsync(measurmentsBoundStmt);
           Futures.addCallback(future, myFutureCallback);
@@ -207,10 +207,10 @@ public class MPerfThreadedSingleTable {
           successCnt = 0;
           errorCnt = 0;
 
-          for (MyFutureCallbackInt myFutureCallback : myFutureCallbackList) {
+          for (MyFutureCallback myFutureCallback : myFutureCallbackList) {
 
-            successCnt += myFutureCallback.successCount;
-            errorCnt += myFutureCallback.errorCount;
+            successCnt += myFutureCallback.getSuccessCount();
+            errorCnt += myFutureCallback.getErrorCount();
 
           }
 
@@ -249,27 +249,4 @@ public class MPerfThreadedSingleTable {
       }
     }
   }
-
-  private static class MyFutureCallbackInt implements FutureCallback<ResultSet> {
-
-    int successCount = 0;
-    int errorCount = 0;
-
-    MyFutureCallbackInt() {
-
-    }
-
-    @Override
-    public void onSuccess(ResultSet result) {
-      this.successCount++;
-
-    }
-
-    @Override
-    public void onFailure(Throwable t) {
-      this.errorCount++;
-
-    }
-  }
-
 }
