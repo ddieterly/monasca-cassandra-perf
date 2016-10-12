@@ -81,7 +81,7 @@ public class MPerfThreadedMultiTable {
 
     for (int i = 0; i < numThreads; i++) {
 
-      mPerfRunnableList.add(new MPerfRunnable(numMeasurementsToInsert, numUniqueMetrics));
+      mPerfRunnableList.add(new MPerfRunnable(numMeasurementsToInsert, numUniqueMetrics, String.valueOf(i)));
 
     }
   }
@@ -145,6 +145,8 @@ public class MPerfThreadedMultiTable {
 
     private final int numMeasurmentsToInsert;
     private final int numUniqueMetrics;
+    private final String threadId;
+    private final String threadMetricNamePrefix;
 
     int successCnt = 0;
     int errorCnt = 0;
@@ -156,10 +158,12 @@ public class MPerfThreadedMultiTable {
     private final PreparedStatement metricsInsertStmt;
 
 
-    MPerfRunnable(int numMeasurementsToInsert, int numUniqueMetrics) {
+    MPerfRunnable(int numMeasurementsToInsert, int numUniqueMetrics, String threadId) {
 
       this.numMeasurmentsToInsert = numMeasurementsToInsert;
       this.numUniqueMetrics = numUniqueMetrics;
+      this.threadId = threadId;
+      this.threadMetricNamePrefix = metricNamePrefix + threadId + "_";
 
        cluster =
           cluster.builder().addContactPoint(CASSANDRA_IP_ADDRESS)
@@ -193,7 +197,7 @@ public class MPerfThreadedMultiTable {
         for (int i = 0; i < numMeasurmentsToInsert; i++) {
 
           String metricNameSuffix = String.valueOf(i % numUniqueMetrics);
-          String metricName = metricNamePrefix.concat(metricNameSuffix);
+          String metricName = threadMetricNamePrefix.concat(metricNameSuffix);
           String metricIdHashString = new StringBuilder(REGION).append(TENANT_ID).append(metricName).append(dimensionHashString).toString();
           ByteBuffer metricIdSha1HashByteBuffer = ByteBuffer.wrap(DigestUtils.sha(metricIdHashString));
           java.sql.Timestamp updatedAt = new java.sql.Timestamp(calendar.getTime().getTime());
