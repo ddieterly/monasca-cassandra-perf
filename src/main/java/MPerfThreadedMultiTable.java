@@ -1,4 +1,3 @@
-import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 
 import com.datastax.driver.core.BoundStatement;
