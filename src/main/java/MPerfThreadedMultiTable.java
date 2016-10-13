@@ -163,7 +163,7 @@ public class MPerfThreadedMultiTable {
       this.numMeasurmentsToInsert = numMeasurementsToInsert;
       this.numUniqueMetrics = numUniqueMetrics;
       this.threadId = threadId;
-      this.threadMetricNamePrefix = metricNamePrefix + threadId + "_";
+      this.threadMetricNamePrefix = metricNamePrefix + "t" + threadId + "_";
 
        cluster =
           cluster.builder().addContactPoint(CASSANDRA_IP_ADDRESS)
