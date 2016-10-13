@@ -1,5 +1,4 @@
 import com.google.common.util.concurrent.FutureCallback;
-
 import com.datastax.driver.core.ResultSet;
 
 class MyFutureCallback implements FutureCallback<ResultSet> {
